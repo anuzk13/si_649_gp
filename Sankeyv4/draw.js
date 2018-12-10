@@ -1,5 +1,11 @@
 var students_exams_data = []
-
+var selected_groups = []
+var combo_map = {}
+var plot_headers = {
+    "mchoice" : "Multiple Choice Questions",
+    "parsons" : "Parsons Questions",
+    "unittest" : "Unit Test Questions"
+}
 var color = d3.scaleOrdinal()
     .range(["#ca0020","#f4a582","#d5d5d5","#92c5de","#0571b0"]);
 
@@ -28,19 +34,39 @@ function findTestItems(cohorts, name) {
 
 function groupDataByChapter(test_cohorts) {
     var groupedData = d3.nest()
-        .key(function (d) { return +d.div_num })
+        .key(function (d) { return d.div_num })
         .entries(test_cohorts);
-    return groupedData.sort((a,b) => a.key-b.key);
+    return groupedData.sort((a,b) => (+a.key) - (+b.key));
 }
 
 function createTestBars(filtered_cohorts, groups, test_name, test_id) {
 
+    d3.select(test_id).selectAll("*").remove();
+    d3.select("#bars-tooltip" + test_name).remove();
+    
+    if (!filtered_cohorts.length) {
+        return;
+    }
+
     var test_cohorts = findTestItems(filtered_cohorts, test_name);
+    if (!test_cohorts.length) {
+        return; 
+    }
+
+    d3.select(test_id).append("h6")
+        .attr("class", "text-center")
+        .html(plot_headers[test_name]);
+
+    d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .attr("id", "bars-tooltip" + test_name )
+        .style("opacity", 0);
+
     var dataitems = groupDataByChapter(test_cohorts);
     var max = d3.max(test_cohorts, function(d) { return +d.student_q_count; } );
-    var margin = { top: 20, right: 20, bottom: 30, left: 60 },
+    var margin = { top: 10, right: 20, bottom: 50, left: 60 },
         width = 850 - margin.left - margin.right,
-        height = 225 - margin.top - margin.bottom;
+        height = 180 - margin.top - margin.bottom;
 
     var x0 = d3.scaleBand()
         .domain(dataitems.map(function (d) { return "ch" + d.key; }))
@@ -56,11 +82,9 @@ function createTestBars(filtered_cohorts, groups, test_name, test_id) {
         .domain([0, max])
         .range([height, 0]);
 
-    var tooltip = d3.select("body").append("div")
-    .attr("class", "tooltip")
-    .style("opacity", 0);
-
-    var svg = d3.select(test_id).append("svg")
+    var svg = d3.select(test_id)
+        .append("svg")
+        .attr("id", "bars-plot-" + test_name)
         .attr("width", width + margin.left + margin.right)
         .attr("height", height + margin.top + margin.bottom)
         .append("g")
@@ -82,21 +106,21 @@ function createTestBars(filtered_cohorts, groups, test_name, test_id) {
         .attr("y", function(d){ return y(d.student_q_count); })
         .attr("height", function(d){ return height - y(d.student_q_count); })
         .attr("fill", "#5b717c")
-        .on("mouseover", function(d,i){
+        .on("mouseover", function(d){
             d3.select(this)
-                .attr("stroke", "black")
-                .attr("stroke-width", 3);
+            .attr("stroke", "black")
+            .attr("stroke-width", 3);
+            var tooltip = d3.select("#bars-tooltip" + test_name);
             tooltip.transition()
                 .duration(200)
                 .style("opacity", .9);
             tooltip
                 .style("left", (d3.event.pageX + 20) + "px")
                 .style("top", (d3.event.pageY - 70) + "px")
-                .html("<b>Students: </b>" + d.student_q_count + "<br>" + "<b>% Correct: </b>" + d.percent_correct + "<br>");
+                .html("<b>Students: </b>" + d.student_q_count + "<br>" + "<b>% Correct: </b>" + (+d.percent_correct).toFixed(2) + " %<br>");
         })
         .on("mouseout", function(d){
             d3.select(this).attr("stroke-width", 0);
-            // tooltip.style("display", "none");
         });
 
     // add the x Axis
@@ -107,7 +131,7 @@ function createTestBars(filtered_cohorts, groups, test_name, test_id) {
 
     gx0.selectAll("line")
         .attr("y2", "20")
-        .attr("transform", "translate(20,0)")
+        .attr("transform", "translate(" +(x0.bandwidth() * 0.53 )+ ",0)")
         .style("fill", "gray")
 
     gx0.selectAll("text")
@@ -133,10 +157,11 @@ function createTestBars(filtered_cohorts, groups, test_name, test_id) {
     
     gx1.selectAll("text")
         .style("text-anchor", "end")
-        .attr("transform", "rotate(-60)")
-        .style("fill","red")
+        .attr("transform", "rotate(-30)")
+        .style("font-size","0.4rem")
         .attr("dx", "-.1em")
-        .attr("dy", ".25em");
+        .attr("dy", ".25em")
+        .html(function (d) { return combo_map[d]});
 
     // hide axis lines and ticks
     svg.selectAll(".tick").style({"stroke-width":0});
@@ -283,32 +308,41 @@ var heatmapChart = function(csvFile) {
             .attr("height", gridHeight - 3)
             .style("fill", colors[0]);
 
-
-        elemts.transition()           // apply a transition
+        elemts.transition()
             .duration(1000)
             .style("fill", function(d) { return colorScale(d.value); })
             
         elemts.on("click", function(d){
             var elem = d3.select("#rect" + d.combo);
+            combo_map[d.combo] = pretests_labels[d.pretest] + "/" + exams_labels[d.exam];
             if (elem.classed("selected-combo")) {
+                selected_groups.splice(selected_groups.indexOf(d.combo + ''), 1); 
                 elem.classed("selected-combo", false);
             } else {
                 elem.classed("selected-combo", true);
-                var groups = ["1","2"];
-                var filtered_cohorts = cohortFilter(["1","2"]);
-                createTestBars(filtered_cohorts, groups, "mchoice", "#mChoiceCircles");
-                createTestBars(filtered_cohorts, groups, "parsons", "#parsonsCircles");
-                createTestBars(filtered_cohorts, groups, "unittest", "#unitTestCircles");
+                selected_groups.push(d.combo + '');
             }
+            var filtered_cohorts = cohortFilter(selected_groups);
+            if (filtered_cohorts.length) {
+                d3.select("#empty_filter")
+                    .style("display", "none");
+            } else {
+                d3.select("#empty_filter")
+                    .style("display", "block");
+            }
+            createTestBars(filtered_cohorts, selected_groups, "mchoice", "#mChoiceCircles");
+            createTestBars(filtered_cohorts, selected_groups, "parsons", "#parsonsCircles");
+            createTestBars(filtered_cohorts, selected_groups, "unittest", "#unitTestCircles");
         })
         .on("mouseover", function(d) {
-            console.log(d)
             div.transition()
                 .duration(200)
                 .style("opacity", .9);
-            div.html( 'Holi' + "<br/>" + 'Ana')
-                .style("left", (d3.event.pageX) + "px")
-                .style("top", (d3.event.pageY - 28) + "px");
+            div.html("<b>Pretest: </b>" + pretests_labels[d.pretest] + "<br>" 
+                    + "<b>% Exam: </b>" + exams_labels[d.exam] + "<br>"
+                    + "<b>% Total count: </b>" + d.value + "<br>")
+                .style("left", (d3.event.pageX + 50) + "px")
+                .style("top", (d3.event.pageY - 50) + "px");
         })
 
 
