@@ -97,6 +97,8 @@ function createTestBars(filtered_cohorts, groups, test_name, test_id) {
         .attr("class", "g")
         .attr("transform",function(d) { return "translate(" + x0("ch" + d.key) + ",0)"; })
 
+    var tooltip = d3.select("#bars-tooltip" + test_name);
+
     var rect = slice.selectAll(".rect")
         .data(function(d) { return d.values})
         .enter().append("rect")
@@ -110,17 +112,19 @@ function createTestBars(filtered_cohorts, groups, test_name, test_id) {
             d3.select(this)
             .attr("stroke", "black")
             .attr("stroke-width", 3);
-            var tooltip = d3.select("#bars-tooltip" + test_name);
+            // var tooltip = d3.select("#bars-tooltip" + test_name);
             tooltip.transition()
                 .duration(200)
                 .style("opacity", .9);
             tooltip
                 .style("left", (d3.event.pageX + 20) + "px")
                 .style("top", (d3.event.pageY - 70) + "px")
+                .style("display", "inline-block")
                 .html("<b>Students: </b>" + d.student_q_count + "<br>" + "<b>% Correct: </b>" + (+d.percent_correct).toFixed(2) + " %<br>");
         })
         .on("mouseout", function(d){
             d3.select(this).attr("stroke-width", 0);
+            tooltip.style("display", "none");
         });
 
     // add the x Axis
@@ -342,7 +346,12 @@ var heatmapChart = function(csvFile) {
                     + "<b>% Exam: </b>" + exams_labels[d.exam] + "<br>"
                     + "<b>% Total count: </b>" + d.value + "<br>")
                 .style("left", (d3.event.pageX + 50) + "px")
-                .style("top", (d3.event.pageY - 50) + "px");
+                .style("top", (d3.event.pageY - 50) + "px")
+                .style("display", "inline-block");
+        })
+        .on("mouseout", function(d){
+            d3.select(this).attr("stroke-width", 0);
+            div.style("display", "none");
         })
 
 
